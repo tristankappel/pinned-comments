@@ -723,6 +723,7 @@
 				// changing the website's layout.
 				pinLayer = document.createElement("div");
 				pinLayer.className = "pc-pin-layer";
+				pinLayer.style.width = contentWidth + "px";
 				contentEl.appendChild(pinLayer);
 				// Prevent the page from shrinking below the content width.
 				document.body.style.minWidth = contentWidth + "px";
