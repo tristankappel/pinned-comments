@@ -90,7 +90,18 @@ body.pc-mode-active .entry-content,
 body.pc-mode-active article,
 body.pc-mode-active main {
     position: relative;
-    transition: max-width 0.3s ease, margin 0.3s ease;
+}
+
+/* ===== Pin Layer (transparent overlay for consistent pin positioning) ===== */
+.pc-pin-layer {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    width: 100%;
+    height: 100%;
+    transform: translateX(-50%);
+    z-index: 99996;
+    pointer-events: auto;
 }
 
 /* ===== Pins ===== */

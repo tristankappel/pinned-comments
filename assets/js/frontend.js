@@ -17,6 +17,7 @@
 	var modeActive = false;
 	var comments = [];
 	var contentEl = null;
+	var pinLayer = null;
 	var activeBubble = null;
 	var activePinId = null;
 
@@ -111,7 +112,7 @@
 
 	function renderPins() {
 		// Remove existing pins.
-		var existing = contentEl.querySelectorAll(".pc-pin");
+		var existing = pinLayer.querySelectorAll(".pc-pin");
 		for (var i = 0; i < existing.length; i++) {
 			existing[i].remove();
 		}
@@ -141,7 +142,7 @@
 			openThread(comment.id, pin);
 		});
 
-		contentEl.appendChild(pin);
+		pinLayer.appendChild(pin);
 	}
 
 	// ===== Open Thread (Comment Bubble) =====
@@ -151,7 +152,7 @@
 		activePinId = pinId;
 
 		// Mark pin active.
-		var allPins = contentEl.querySelectorAll(".pc-pin");
+		var allPins = pinLayer.querySelectorAll(".pc-pin");
 		for (var i = 0; i < allPins.length; i++) {
 			allPins[i].classList.remove("pc-pin-active");
 		}
@@ -163,13 +164,13 @@
 
 		// Position bubble near pin.
 		var pinRect = pinEl.getBoundingClientRect();
-		var contentRect = contentEl.getBoundingClientRect();
+		var layerRect = pinLayer.getBoundingClientRect();
 		var bubbleWidth = 320;
 		var left = pinEl.offsetLeft + 24;
 		var top = pinEl.offsetTop - 10;
 
 		// Keep bubble on screen.
-		if (left + bubbleWidth > contentEl.offsetWidth) {
+		if (left + bubbleWidth > pinLayer.offsetWidth) {
 			left = pinEl.offsetLeft - bubbleWidth - 24;
 		}
 		if (left < 0) left = 8;
@@ -230,7 +231,7 @@
 			bubble.appendChild(notice);
 		}
 
-		contentEl.appendChild(bubble);
+		pinLayer.appendChild(bubble);
 		activeBubble = bubble;
 
 		// Stop clicks inside bubble from creating new pins.
@@ -261,7 +262,7 @@
 			activeBubble = null;
 		}
 		activePinId = null;
-		var allPins = contentEl.querySelectorAll(".pc-pin");
+		var allPins = pinLayer.querySelectorAll(".pc-pin");
 		for (var i = 0; i < allPins.length; i++) {
 			allPins[i].classList.remove("pc-pin-active");
 		}
@@ -564,7 +565,7 @@
 		e.preventDefault();
 		e.stopPropagation();
 
-		var rect = contentEl.getBoundingClientRect();
+		var rect = pinLayer.getBoundingClientRect();
 		var x = ((e.clientX - rect.left) / rect.width) * 100;
 		var y = ((e.clientY - rect.top) / rect.height) * 100;
 
@@ -586,7 +587,7 @@
 		var dot = document.createElement("div");
 		dot.className = "pc-pin-dot";
 		pin.appendChild(dot);
-		contentEl.appendChild(pin);
+		pinLayer.appendChild(pin);
 
 		// Create bubble with new comment form.
 		var bubble = document.createElement("div");
@@ -595,7 +596,7 @@
 		var bubbleWidth = 320;
 		var left = pin.offsetLeft + 24;
 		var top = pin.offsetTop - 10;
-		if (left + bubbleWidth > contentEl.offsetWidth) {
+		if (left + bubbleWidth > pinLayer.offsetWidth) {
 			left = pin.offsetLeft - bubbleWidth - 24;
 		}
 		if (left < 0) left = 8;
@@ -672,7 +673,7 @@
 			e.stopPropagation();
 		});
 
-		contentEl.appendChild(bubble);
+		pinLayer.appendChild(bubble);
 		activeBubble = bubble;
 
 		textarea.focus();
@@ -717,11 +718,14 @@
 			overlay.setAttribute("aria-hidden", "false");
 			contentEl = findContentEl();
 			if (contentEl) {
-				// Apply constrained width for consistent pin positioning.
-				contentEl.style.maxWidth = contentWidth + "px";
-				contentEl.style.marginLeft = "auto";
-				contentEl.style.marginRight = "auto";
-				contentEl.addEventListener("click", handleContentClick);
+				// Create a transparent pin layer over the content.
+				// This constrains pin coordinates to a fixed width without
+				// changing the website's layout.
+				pinLayer = document.createElement("div");
+				pinLayer.className = "pc-pin-layer";
+				pinLayer.style.maxWidth = contentWidth + "px";
+				contentEl.appendChild(pinLayer);
+				pinLayer.addEventListener("click", handleContentClick);
 				loadComments();
 			}
 		} else {
@@ -730,18 +734,12 @@
 			label.textContent = i18n.commentMode || "Comment Mode";
 			overlay.setAttribute("aria-hidden", "true");
 			closeBubble();
-			if (contentEl) {
-				// Restore original styles.
-				contentEl.style.maxWidth = "";
-				contentEl.style.marginLeft = "";
-				contentEl.style.marginRight = "";
-				contentEl.removeEventListener("click", handleContentClick);
+			if (pinLayer) {
+				pinLayer.removeEventListener("click", handleContentClick);
+				pinLayer.remove();
+				pinLayer = null;
 			}
-			// Remove pins.
-			var pins = document.querySelectorAll(".pc-pin");
-			for (var i = 0; i < pins.length; i++) {
-				pins[i].remove();
-			}
+			contentEl = null;
 		}
 	}
 
