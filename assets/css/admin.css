@@ -1,0 +1,74 @@
+/* Pinned Comments – Admin Styles */
+/* System fonts only, no external libraries */
+
+.pc-admin-wrap {
+    max-width: 640px;
+}
+
+.pc-admin-description {
+    color: #50575e;
+    font-size: 14px;
+    margin-bottom: 24px;
+}
+
+.pc-admin-card {
+    background: #fff;
+    border: 1px solid #c3c4c7;
+    border-radius: 4px;
+    padding: 20px 24px;
+    margin-bottom: 20px;
+}
+
+.pc-admin-card h2 {
+    margin-top: 0;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.pc-admin-danger {
+    border-color: #d63638;
+}
+
+.pc-admin-danger h2 {
+    color: #d63638;
+}
+
+.button-danger {
+    color: #fff;
+    background: #d63638;
+    border-color: #d63638;
+    text-shadow: none;
+}
+
+.button-danger:hover {
+    background: #b32d2e;
+    border-color: #b32d2e;
+    color: #fff;
+}
+
+#pc-delete-all-btn.loading {
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+.pc-admin-message {
+    margin-top: 12px;
+    padding: 8px 12px;
+    border-radius: 4px;
+    font-size: 13px;
+    display: none;
+}
+
+.pc-admin-message.success {
+    background: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+    display: block;
+}
+
+.pc-admin-message.error {
+    background: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+    display: block;
+}
