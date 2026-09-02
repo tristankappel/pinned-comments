@@ -90,6 +90,7 @@ body.pc-mode-active .entry-content,
 body.pc-mode-active article,
 body.pc-mode-active main {
     position: relative;
+    transition: max-width 0.3s ease, margin 0.3s ease;
 }
 
 /* ===== Pins ===== */

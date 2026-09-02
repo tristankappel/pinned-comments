@@ -49,11 +49,12 @@ class PC_Frontend {
         );
 
         wp_localize_script( 'pc-frontend', 'pcData', array(
-            'ajaxUrl'    => admin_url( 'admin-ajax.php' ),
-            'nonce'      => wp_create_nonce( 'pc_nonce' ),
-            'postId'     => get_the_ID(),
-            'isLoggedIn' => is_user_logged_in(),
-            'userId'     => get_current_user_id(),
+            'ajaxUrl'      => admin_url( 'admin-ajax.php' ),
+            'nonce'        => wp_create_nonce( 'pc_nonce' ),
+            'postId'       => get_the_ID(),
+            'isLoggedIn'   => is_user_logged_in(),
+            'userId'       => get_current_user_id(),
+            'contentWidth' => (int) get_option( 'pc_content_width', 800 ),
             'i18n'       => array(
                 'commentMode'      => __( 'Comment Mode', 'pinned-comments' ),
                 'exitCommentMode'  => __( 'Exit Comment Mode', 'pinned-comments' ),

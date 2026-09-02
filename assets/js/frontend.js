@@ -11,6 +11,7 @@
 	var postId = data.postId;
 	var isLoggedIn = data.isLoggedIn;
 	var currentUserId = data.userId;
+	var contentWidth = data.contentWidth || 800;
 	var i18n = data.i18n || {};
 
 	var modeActive = false;
@@ -716,6 +717,10 @@
 			overlay.setAttribute("aria-hidden", "false");
 			contentEl = findContentEl();
 			if (contentEl) {
+				// Apply constrained width for consistent pin positioning.
+				contentEl.style.maxWidth = contentWidth + "px";
+				contentEl.style.marginLeft = "auto";
+				contentEl.style.marginRight = "auto";
 				contentEl.addEventListener("click", handleContentClick);
 				loadComments();
 			}
@@ -726,6 +731,10 @@
 			overlay.setAttribute("aria-hidden", "true");
 			closeBubble();
 			if (contentEl) {
+				// Restore original styles.
+				contentEl.style.maxWidth = "";
+				contentEl.style.marginLeft = "";
+				contentEl.style.marginRight = "";
 				contentEl.removeEventListener("click", handleContentClick);
 			}
 			// Remove pins.

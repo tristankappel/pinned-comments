@@ -15,3 +15,4 @@ $table = $wpdb->prefix . 'pinned_comments';
 $wpdb->query( "DROP TABLE IF EXISTS $table" );
 
 delete_option( 'pc_version' );
+delete_option( 'pc_content_width' );

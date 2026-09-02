@@ -22,7 +22,40 @@ class PC_Admin {
 
     private function __construct() {
         add_action( 'admin_menu', array( $this, 'add_settings_page' ) );
+        add_action( 'admin_init', array( $this, 'register_settings' ) );
         add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_assets' ) );
+    }
+
+    /**
+     * Register plugin settings.
+     */
+    public function register_settings() {
+        register_setting(
+            'pc_settings_group',
+            'pc_content_width',
+            array(
+                'type'              => 'integer',
+                'sanitize_callback' => array( $this, 'sanitize_content_width' ),
+                'default'           => 800,
+            )
+        );
+    }
+
+    /**
+     * Sanitize the content width value.
+     *
+     * @param mixed $value Raw input.
+     * @return int
+     */
+    public function sanitize_content_width( $value ) {
+        $value = absint( $value );
+        if ( $value < 200 ) {
+            $value = 200;
+        }
+        if ( $value > 2000 ) {
+            $value = 2000;
+        }
+        return $value;
     }
 
     /**
@@ -85,6 +118,28 @@ class PC_Admin {
         <div class="wrap pc-admin-wrap">
             <h1><?php echo esc_html__( 'Pinned Comments', 'pinned-comments' ); ?></h1>
             <p class="pc-admin-description"><?php esc_html_e( 'Figma-style pinned comments for your posts and pages.', 'pinned-comments' ); ?></p>
+
+            <div class="pc-admin-card">
+                <h2><?php esc_html_e( 'Content Width', 'pinned-comments' ); ?></h2>
+                <p><?php esc_html_e( 'Set the max width (in pixels) for the content area when Comment Mode is active. This ensures pins stay in the correct position across different screen sizes.', 'pinned-comments' ); ?></p>
+                <form method="post" action="options.php">
+                    <?php settings_fields( 'pc_settings_group' ); ?>
+                    <table class="form-table" role="presentation">
+                        <tr>
+                            <th scope="row">
+                                <label for="pc_content_width"><?php esc_html_e( 'Max Content Width (px)', 'pinned-comments' ); ?></label>
+                            </th>
+                            <td>
+                                <input type="number" id="pc_content_width" name="pc_content_width"
+                                    value="<?php echo esc_attr( get_option( 'pc_content_width', 800 ) ); ?>"
+                                    min="200" max="2000" step="10" class="small-text" />
+                                <p class="description"><?php esc_html_e( 'Recommended: 600–1200. On screens smaller than this width, the content will use the full available width.', 'pinned-comments' ); ?></p>
+                            </td>
+                        </tr>
+                    </table>
+                    <?php submit_button( __( 'Save Settings', 'pinned-comments' ) ); ?>
+                </form>
+            </div>
 
             <div class="pc-admin-card">
                 <h2><?php esc_html_e( 'Statistics', 'pinned-comments' ); ?></h2>
