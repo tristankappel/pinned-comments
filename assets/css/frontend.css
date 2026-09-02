@@ -84,6 +84,7 @@ body.pc-mode-active .pc-overlay {
 
 body.pc-mode-active {
     cursor: crosshair;
+    overflow-x: auto;
 }
 
 body.pc-mode-active .entry-content,

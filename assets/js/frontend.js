@@ -723,7 +723,7 @@
 				// changing the website's layout.
 				pinLayer = document.createElement("div");
 				pinLayer.className = "pc-pin-layer";
-				pinLayer.style.maxWidth = contentWidth + "px";
+				pinLayer.style.minWidth = contentWidth + "px";
 				contentEl.appendChild(pinLayer);
 				pinLayer.addEventListener("click", handleContentClick);
 				loadComments();
