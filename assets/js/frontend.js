@@ -723,8 +723,9 @@
 				// changing the website's layout.
 				pinLayer = document.createElement("div");
 				pinLayer.className = "pc-pin-layer";
-				pinLayer.style.minWidth = contentWidth + "px";
 				contentEl.appendChild(pinLayer);
+				// Prevent the page from shrinking below the content width.
+				document.body.style.minWidth = contentWidth + "px";
 				pinLayer.addEventListener("click", handleContentClick);
 				loadComments();
 			}
@@ -734,6 +735,7 @@
 			label.textContent = i18n.commentMode || "Comment Mode";
 			overlay.setAttribute("aria-hidden", "true");
 			closeBubble();
+			document.body.style.minWidth = "";
 			if (pinLayer) {
 				pinLayer.removeEventListener("click", handleContentClick);
 				pinLayer.remove();
