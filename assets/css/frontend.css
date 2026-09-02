@@ -79,6 +79,10 @@
 
 body.pc-mode-active .pc-overlay {
     display: block;
+    pointer-events: none;
+}
+
+body.pc-mode-active {
     cursor: crosshair;
 }
 
@@ -104,6 +108,7 @@ body.pc-mode-active main {
         transform: scale(0);
         opacity: 0;
     }
+
     to {
         transform: scale(1);
         opacity: 1;
@@ -174,6 +179,7 @@ body.pc-mode-active main {
         opacity: 0;
         transform: translateY(8px);
     }
+
     to {
         opacity: 1;
         transform: translateY(0);
@@ -228,7 +234,7 @@ body.pc-mode-active main {
     position: relative;
 }
 
-.pc-comment + .pc-comment {
+.pc-comment+.pc-comment {
     border-top: 1px solid #f5f5f5;
 }
 
