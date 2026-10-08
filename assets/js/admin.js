@@ -11,6 +11,10 @@
     var i18n = data.i18n || {};
 
     function init() {
+        if (window.jQuery && window.jQuery.fn.wpColorPicker) {
+            window.jQuery('.pc-color-picker').wpColorPicker();
+        }
+
         var btn = document.getElementById('pc-delete-all-btn');
         if (!btn) return;
 
@@ -44,8 +48,10 @@
                         if (res.success) {
                             msgEl.className = 'pc-admin-message success';
                             msgEl.textContent = i18n.deleted || 'All comments deleted.';
-                            var countEl = document.getElementById('pc-total-count');
-                            if (countEl) countEl.textContent = '0';
+                            ['pc-total-count', 'pc-desktop-count', 'pc-mobile-count'].forEach(function (id) {
+                                var countEl = document.getElementById(id);
+                                if (countEl) countEl.textContent = '0';
+                            });
                         } else {
                             msgEl.className = 'pc-admin-message error';
                             msgEl.textContent = (res.data && res.data.message) || (i18n.error || 'An error occurred.');

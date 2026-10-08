@@ -39,6 +39,37 @@ class PC_Admin {
                 'default'           => 800,
             )
         );
+
+        register_setting(
+            'pc_settings_group',
+            'pc_mobile_width',
+            array(
+                'type'              => 'integer',
+                'sanitize_callback' => array( $this, 'sanitize_mobile_width' ),
+                'default'           => 390,
+            )
+        );
+
+        register_setting(
+            'pc_settings_group',
+            'pc_accent_color',
+            array(
+                'type'              => 'string',
+                'sanitize_callback' => array( $this, 'sanitize_accent_color' ),
+                'default'           => PC_Frontend::DEFAULT_ACCENT,
+            )
+        );
+    }
+
+    /**
+     * Sanitize the accent color, falling back to the default.
+     *
+     * @param mixed $value Raw input.
+     * @return string
+     */
+    public function sanitize_accent_color( $value ) {
+        $color = sanitize_hex_color( (string) $value );
+        return $color ? $color : PC_Frontend::DEFAULT_ACCENT;
     }
 
     /**
@@ -54,6 +85,23 @@ class PC_Admin {
         }
         if ( $value > 2000 ) {
             $value = 2000;
+        }
+        return $value;
+    }
+
+    /**
+     * Sanitize the mobile wrapper width value.
+     *
+     * @param mixed $value Raw input.
+     * @return int
+     */
+    public function sanitize_mobile_width( $value ) {
+        $value = absint( $value );
+        if ( $value < 200 ) {
+            $value = 200;
+        }
+        if ( $value > 1200 ) {
+            $value = 1200;
         }
         return $value;
     }
@@ -84,14 +132,14 @@ class PC_Admin {
         wp_enqueue_style(
             'pc-admin',
             PC_PLUGIN_URL . 'assets/css/admin.css',
-            array(),
+            array( 'wp-color-picker' ),
             PC_VERSION
         );
 
         wp_enqueue_script(
             'pc-admin',
             PC_PLUGIN_URL . 'assets/js/admin.js',
-            array(),
+            array( 'jquery', 'wp-color-picker' ),
             PC_VERSION,
             true
         );
@@ -120,20 +168,42 @@ class PC_Admin {
             <p class="pc-admin-description"><?php esc_html_e( 'Figma-style pinned comments for your posts and pages.', 'pinned-comments' ); ?></p>
 
             <div class="pc-admin-card">
-                <h2><?php esc_html_e( 'Content Width', 'pinned-comments' ); ?></h2>
-                <p><?php esc_html_e( 'Set the max width (in pixels) for the content area when Comment Mode is active. This ensures pins stay in the correct position across different screen sizes.', 'pinned-comments' ); ?></p>
+                <h2><?php esc_html_e( 'Appearance', 'pinned-comments' ); ?></h2>
+                <p><?php esc_html_e( 'In Comment Mode the page is rendered inside a frame with a fixed viewport width, so the layout – and therefore every pin position – is always identical. Desktop and mobile each have their own wrapper width and their own set of comments.', 'pinned-comments' ); ?></p>
                 <form method="post" action="options.php">
                     <?php settings_fields( 'pc_settings_group' ); ?>
                     <table class="form-table" role="presentation">
                         <tr>
                             <th scope="row">
-                                <label for="pc_content_width"><?php esc_html_e( 'Max Content Width (px)', 'pinned-comments' ); ?></label>
+                                <label for="pc_content_width"><?php esc_html_e( 'Desktop Wrapper Width (px)', 'pinned-comments' ); ?></label>
                             </th>
                             <td>
                                 <input type="number" id="pc_content_width" name="pc_content_width"
                                     value="<?php echo esc_attr( get_option( 'pc_content_width', 800 ) ); ?>"
                                     min="200" max="2000" step="10" class="small-text" />
-                                <p class="description"><?php esc_html_e( 'Recommended: 600–1200. On screens smaller than this width, the content will use the full available width.', 'pinned-comments' ); ?></p>
+                                <p class="description"><?php esc_html_e( 'Recommended: 1000–1440. The desktop frame always keeps this exact viewport width; smaller screens scroll horizontally instead of shrinking it.', 'pinned-comments' ); ?></p>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th scope="row">
+                                <label for="pc_mobile_width"><?php esc_html_e( 'Mobile Wrapper Width (px)', 'pinned-comments' ); ?></label>
+                            </th>
+                            <td>
+                                <input type="number" id="pc_mobile_width" name="pc_mobile_width"
+                                    value="<?php echo esc_attr( get_option( 'pc_mobile_width', 390 ) ); ?>"
+                                    min="200" max="1200" step="10" class="small-text" />
+                                <p class="description"><?php esc_html_e( 'Recommended: 320–480. The mobile frame uses this exact viewport width, so the theme renders its real mobile layout.', 'pinned-comments' ); ?></p>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th scope="row">
+                                <label for="pc_accent_color"><?php esc_html_e( 'Accent Color', 'pinned-comments' ); ?></label>
+                            </th>
+                            <td>
+                                <input type="text" id="pc_accent_color" name="pc_accent_color" class="pc-color-picker"
+                                    value="<?php echo esc_attr( get_option( 'pc_accent_color', PC_Frontend::DEFAULT_ACCENT ) ); ?>"
+                                    data-default-color="<?php echo esc_attr( PC_Frontend::DEFAULT_ACCENT ); ?>" />
+                                <p class="description"><?php esc_html_e( 'Used for pins, buttons, links and focus states in the frontend. The hover state is derived automatically.', 'pinned-comments' ); ?></p>
                             </td>
                         </tr>
                     </table>
@@ -146,6 +216,13 @@ class PC_Admin {
                 <p>
                     <strong><?php esc_html_e( 'Total comments:', 'pinned-comments' ); ?></strong>
                     <span id="pc-total-count"><?php echo esc_html( number_format_i18n( $total ) ); ?></span>
+                </p>
+                <p>
+                    <strong><?php esc_html_e( 'Desktop:', 'pinned-comments' ); ?></strong>
+                    <span id="pc-desktop-count"><?php echo esc_html( number_format_i18n( PC_Database::count_by_viewport( 'desktop' ) ) ); ?></span>
+                    &nbsp;&nbsp;
+                    <strong><?php esc_html_e( 'Mobile:', 'pinned-comments' ); ?></strong>
+                    <span id="pc-mobile-count"><?php echo esc_html( number_format_i18n( PC_Database::count_by_viewport( 'mobile' ) ) ); ?></span>
                 </p>
             </div>
 

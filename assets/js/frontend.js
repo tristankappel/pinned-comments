@@ -12,7 +12,14 @@
 	var isLoggedIn = data.isLoggedIn;
 	var currentUserId = data.userId;
 	var contentWidth = data.contentWidth || 800;
+	var mobileWidth = data.mobileWidth || 390;
+	var isFrame = !!data.isFrame;
+	var canUpload = !!data.canUpload;
+	var maxImages = data.maxImages || 5;
 	var i18n = data.i18n || {};
+
+	var VIEWPORT_STORAGE_KEY = "pcViewport";
+	var ORIGIN = window.location.protocol + "//" + window.location.host;
 
 	var modeActive = false;
 	var comments = [];
@@ -20,27 +27,67 @@
 	var pinLayer = null;
 	var activeBubble = null;
 	var activePinId = null;
+	var viewport = readStoredViewport();
 
 	// ===== Helpers =====
 
-	function ajax(action, params, callback) {
-		var body =
-			"action=" +
-			encodeURIComponent(action) +
-			"&nonce=" +
-			encodeURIComponent(nonce);
+	function readStoredViewport() {
+		var stored = null;
+		try {
+			stored = window.localStorage.getItem(VIEWPORT_STORAGE_KEY);
+		} catch (e) {
+			stored = null;
+		}
+		if (stored === "mobile" || stored === "desktop") {
+			return stored;
+		}
+		return window.innerWidth <= 768 ? "mobile" : "desktop";
+	}
+
+	function storeViewport(value) {
+		try {
+			window.localStorage.setItem(VIEWPORT_STORAGE_KEY, value);
+		} catch (e) {
+			/* storage unavailable – keep the choice for this page view only */
+		}
+	}
+
+	function viewportWidth() {
+		return viewport === "mobile" ? mobileWidth : contentWidth;
+	}
+
+	// Keep in sync with the .pc-bubble widths in frontend.css.
+	function bubbleSize() {
+		return Math.min(380, Math.max(220, window.innerWidth - 48));
+	}
+
+	/**
+	 * @param {string}   action
+	 * @param {Object}   params
+	 * @param {Function} callback
+	 * @param {Object}   [extra] Optional { files: File[], removals: string[] }.
+	 */
+	function ajax(action, params, callback, extra) {
+		var body = new FormData();
+		body.append("action", action);
+		body.append("nonce", nonce);
 		for (var key in params) {
 			if (params.hasOwnProperty(key)) {
-				body +=
-					"&" + encodeURIComponent(key) + "=" + encodeURIComponent(params[key]);
+				body.append(key, params[key]);
+			}
+		}
+		if (extra && extra.files) {
+			for (var i = 0; i < extra.files.length; i++) {
+				body.append("pc_images[]", extra.files[i]);
+			}
+		}
+		if (extra && extra.removals) {
+			for (var j = 0; j < extra.removals.length; j++) {
+				body.append("remove_attachments[]", extra.removals[j]);
 			}
 		}
 		var xhr = new XMLHttpRequest();
 		xhr.open("POST", ajaxUrl, true);
-		xhr.setRequestHeader(
-			"Content-Type",
-			"application/x-www-form-urlencoded; charset=UTF-8"
-		);
 		xhr.onreadystatechange = function () {
 			if (xhr.readyState === 4) {
 				if (xhr.status === 200) {
@@ -98,19 +145,196 @@
 		return div.innerHTML;
 	}
 
+	// ===== Image Uploader =====
+
+	/**
+	 * Thumbnail list plus file picker, capped at `maxImages` entries.
+	 *
+	 * @param {Array} existing Already stored attachments ({ file, url }), edit mode only.
+	 */
+	function createUploader(existing) {
+		var kept = (existing || []).slice();
+		var removals = [];
+		var picked = [];
+		var previews = [];
+
+		var wrap = document.createElement("div");
+		wrap.className = "pc-uploader";
+
+		var list = document.createElement("div");
+		list.className = "pc-upload-list";
+
+		var bar = document.createElement("div");
+		bar.className = "pc-upload-bar";
+
+		var input = document.createElement("input");
+		input.type = "file";
+		input.className = "pc-upload-input";
+		input.accept = "image/jpeg,image/png,image/gif,image/webp";
+		input.multiple = true;
+
+		var addBtn = document.createElement("button");
+		addBtn.type = "button";
+		addBtn.className = "pc-upload-add";
+		addBtn.textContent = i18n.addImages || "Add images";
+
+		var info = document.createElement("span");
+		info.className = "pc-upload-info";
+
+		function total() {
+			return kept.length + picked.length;
+		}
+
+		function thumb(src, onRemove) {
+			var item = document.createElement("div");
+			item.className = "pc-upload-thumb";
+
+			var img = document.createElement("img");
+			img.src = src;
+			img.alt = "";
+			item.appendChild(img);
+
+			var remove = document.createElement("button");
+			remove.type = "button";
+			remove.className = "pc-upload-remove";
+			remove.innerHTML = "&times;";
+			remove.title = i18n.removeImage || "Remove image";
+			remove.addEventListener("click", function (e) {
+				e.stopPropagation();
+				onRemove();
+				render();
+			});
+			item.appendChild(remove);
+
+			return item;
+		}
+
+		function render() {
+			list.innerHTML = "";
+
+			kept.forEach(function (attachment) {
+				list.appendChild(
+					thumb(attachment.url, function () {
+						removals.push(attachment.file);
+						kept = kept.filter(function (a) {
+							return a.file !== attachment.file;
+						});
+					})
+				);
+			});
+
+			picked.forEach(function (file, index) {
+				var url = previews[index];
+				list.appendChild(
+					thumb(url, function () {
+						URL.revokeObjectURL(url);
+						picked.splice(index, 1);
+						previews.splice(index, 1);
+					})
+				);
+			});
+
+			info.textContent = total() + " / " + maxImages;
+			addBtn.disabled = total() >= maxImages;
+		}
+
+		addBtn.addEventListener("click", function (e) {
+			e.stopPropagation();
+			input.click();
+		});
+
+		input.addEventListener("change", function () {
+			var files = Array.prototype.slice.call(input.files || []);
+			var room = maxImages - total();
+			if (files.length > room) {
+				files = files.slice(0, Math.max(0, room));
+				alert(i18n.maxImagesReached || "Too many images.");
+			}
+			files.forEach(function (file) {
+				picked.push(file);
+				previews.push(URL.createObjectURL(file));
+			});
+			input.value = "";
+			render();
+		});
+
+		bar.appendChild(addBtn);
+		bar.appendChild(info);
+		wrap.appendChild(list);
+		wrap.appendChild(bar);
+		wrap.appendChild(input);
+		render();
+
+		return {
+			el: wrap,
+			files: function () {
+				return picked;
+			},
+			removals: function () {
+				return removals;
+			},
+			count: function () {
+				return total();
+			},
+			reset: function () {
+				previews.forEach(function (url) {
+					URL.revokeObjectURL(url);
+				});
+				picked = [];
+				previews = [];
+				removals = [];
+				render();
+			},
+		};
+	}
+
+	function renderAttachments(comment) {
+		if (!comment.attachments || !comment.attachments.length) return null;
+
+		var grid = document.createElement("div");
+		grid.className = "pc-comment-attachments";
+
+		comment.attachments.forEach(function (attachment) {
+			var link = document.createElement("a");
+			link.className = "pc-comment-attachment";
+			link.href = attachment.url;
+			link.target = "_blank";
+			link.rel = "noopener noreferrer";
+
+			var img = document.createElement("img");
+			img.src = attachment.url;
+			img.alt = i18n.attachments || "Images";
+			img.loading = "lazy";
+			link.appendChild(img);
+
+			grid.appendChild(link);
+		});
+
+		return grid;
+	}
+
 	// ===== Load Comments =====
 
 	function loadComments() {
-		ajax("pc_load_comments", { post_id: postId }, function (err, res) {
-			if (err || !res || !res.success) return;
-			comments = res.data.comments || [];
-			renderPins();
-		});
+		var requestedViewport = viewport;
+		ajax(
+			"pc_load_comments",
+			{ post_id: postId, viewport: requestedViewport },
+			function (err, res) {
+				if (err || !res || !res.success) return;
+				// Ignore stale responses after a viewport switch.
+				if (requestedViewport !== viewport || !pinLayer) return;
+				comments = res.data.comments || [];
+				renderPins();
+			}
+		);
 	}
 
 	// ===== Render Pins =====
 
 	function renderPins() {
+		if (!pinLayer) return;
+
 		// Remove existing pins.
 		var existing = pinLayer.querySelectorAll(".pc-pin");
 		for (var i = 0; i < existing.length; i++) {
@@ -165,7 +389,7 @@
 		// Position bubble near pin.
 		var pinRect = pinEl.getBoundingClientRect();
 		var layerRect = pinLayer.getBoundingClientRect();
-		var bubbleWidth = 320;
+		var bubbleWidth = bubbleSize();
 		var left = pinEl.offsetLeft + 24;
 		var top = pinEl.offsetTop - 10;
 
@@ -262,9 +486,11 @@
 			activeBubble = null;
 		}
 		activePinId = null;
-		var allPins = pinLayer.querySelectorAll(".pc-pin");
-		for (var i = 0; i < allPins.length; i++) {
-			allPins[i].classList.remove("pc-pin-active");
+		if (pinLayer) {
+			var allPins = pinLayer.querySelectorAll(".pc-pin");
+			for (var i = 0; i < allPins.length; i++) {
+				allPins[i].classList.remove("pc-pin-active");
+			}
 		}
 		document.removeEventListener("click", outsideClickHandler);
 	}
@@ -315,6 +541,11 @@
 		content.className = "pc-comment-content";
 		content.textContent = comment.content;
 		item.appendChild(content);
+
+		var attachments = renderAttachments(comment);
+		if (attachments) {
+			item.appendChild(attachments);
+		}
 
 		// Actions (only for own comments).
 		if (comment.isOwn) {
@@ -376,6 +607,8 @@
 		var textarea = document.createElement("textarea");
 		textarea.value = comment.content;
 
+		var uploader = canUpload ? createUploader(comment.attachments) : null;
+
 		var actions = document.createElement("div");
 		actions.className = "pc-edit-actions";
 
@@ -390,7 +623,10 @@
 		saveBtn.addEventListener("click", function (e) {
 			e.stopPropagation();
 			var val = textarea.value.trim();
-			if (!val) return;
+			var hasImages = uploader
+				? uploader.count() > 0
+				: (comment.attachments || []).length > 0;
+			if (!val && !hasImages) return;
 			saveBtn.disabled = true;
 			ajax(
 				"pc_edit_comment",
@@ -401,13 +637,18 @@
 				function (err, res) {
 					saveBtn.disabled = false;
 					if (err || !res || !res.success) {
-						alert(i18n.error || "Something went wrong.");
+						alert(
+							(res && res.data && res.data.message) ||
+								i18n.error ||
+								"Something went wrong."
+						);
 						return;
 					}
 					// Update local data.
 					for (var i = 0; i < comments.length; i++) {
 						if (comments[i].id === comment.id) {
 							comments[i].content = res.data.comment.content;
+							comments[i].attachments = res.data.comment.attachments;
 							comments[i].modifiedAt = res.data.comment.modifiedAt;
 							break;
 						}
@@ -421,18 +662,25 @@
 							openThread(activePinId, pinEl);
 						}
 					}
-				}
+				},
+				uploader
+					? { files: uploader.files(), removals: uploader.removals() }
+					: null
 			);
 		});
 
 		cancelBtn.addEventListener("click", function (e) {
 			e.stopPropagation();
+			if (uploader) uploader.reset();
 			formDiv.remove();
 		});
 
 		actions.appendChild(saveBtn);
 		actions.appendChild(cancelBtn);
 		formDiv.appendChild(textarea);
+		if (uploader) {
+			formDiv.appendChild(uploader.el);
+		}
 		formDiv.appendChild(actions);
 
 		item.appendChild(formDiv);
@@ -448,6 +696,8 @@
 		var textarea = document.createElement("textarea");
 		textarea.placeholder = i18n.replyPlaceholder || "Write a reply...";
 
+		var uploader = canUpload ? createUploader() : null;
+
 		var actions = document.createElement("div");
 		actions.className = "pc-bubble-form-actions";
 
@@ -458,7 +708,7 @@
 		sendBtn.addEventListener("click", function (e) {
 			e.stopPropagation();
 			var val = textarea.value.trim();
-			if (!val) return;
+			if (!val && !(uploader && uploader.count())) return;
 			sendBtn.disabled = true;
 			ajax(
 				"pc_create_comment",
@@ -468,15 +718,21 @@
 					parent_id: parentId,
 					x_position: 0,
 					y_position: 0,
+					viewport: viewport,
 				},
 				function (err, res) {
 					sendBtn.disabled = false;
 					if (err || !res || !res.success) {
-						alert(i18n.error || "Something went wrong.");
+						alert(
+							(res && res.data && res.data.message) ||
+								i18n.error ||
+								"Something went wrong."
+						);
 						return;
 					}
 					comments.push(res.data.comment);
 					textarea.value = "";
+					if (uploader) uploader.reset();
 					// Re-render thread.
 					if (activePinId) {
 						var pinEl = contentEl.querySelector(
@@ -486,12 +742,16 @@
 							openThread(activePinId, pinEl);
 						}
 					}
-				}
+				},
+				uploader ? { files: uploader.files() } : null
 			);
 		});
 
 		actions.appendChild(sendBtn);
 		form.appendChild(textarea);
+		if (uploader) {
+			form.appendChild(uploader.el);
+		}
 		form.appendChild(actions);
 
 		// Submit on Ctrl+Enter.
@@ -593,7 +853,7 @@
 		var bubble = document.createElement("div");
 		bubble.className = "pc-bubble";
 
-		var bubbleWidth = 320;
+		var bubbleWidth = bubbleSize();
 		var left = pin.offsetLeft + 24;
 		var top = pin.offsetTop - 10;
 		if (left + bubbleWidth > pinLayer.offsetWidth) {
@@ -629,6 +889,8 @@
 		var textarea = document.createElement("textarea");
 		textarea.placeholder = i18n.placeholder || "Write a comment...";
 
+		var uploader = canUpload ? createUploader() : null;
+
 		var actions = document.createElement("div");
 		actions.className = "pc-bubble-form-actions";
 
@@ -639,7 +901,7 @@
 		sendBtn.addEventListener("click", function (e) {
 			e.stopPropagation();
 			var val = textarea.value.trim();
-			if (!val) return;
+			if (!val && !(uploader && uploader.count())) return;
 			sendBtn.disabled = true;
 			ajax(
 				"pc_create_comment",
@@ -649,22 +911,32 @@
 					parent_id: 0,
 					x_position: x,
 					y_position: y,
+					viewport: viewport,
 				},
 				function (err, res) {
 					sendBtn.disabled = false;
 					if (err || !res || !res.success) {
-						alert(i18n.error || "Something went wrong.");
+						alert(
+							(res && res.data && res.data.message) ||
+								i18n.error ||
+								"Something went wrong."
+						);
 						return;
 					}
 					comments.push(res.data.comment);
+					if (uploader) uploader.reset();
 					closeNewCommentForm(pin, bubble);
 					renderPins();
-				}
+				},
+				uploader ? { files: uploader.files() } : null
 			);
 		});
 
 		actions.appendChild(sendBtn);
 		form.appendChild(textarea);
+		if (uploader) {
+			form.appendChild(uploader.el);
+		}
 		form.appendChild(actions);
 		bubble.appendChild(form);
 
@@ -703,70 +975,278 @@
 		if (activeBubble === bubble) activeBubble = null;
 	}
 
+	// ===== Pin Layer (inside the frame) =====
+
+	function createPinLayer() {
+		contentEl = findContentEl();
+		if (!contentEl) return;
+
+		// Transparent layer spanning the content element. Inside the frame the
+		// viewport itself is fixed to the wrapper width, so percentage based pin
+		// coordinates always resolve to the exact same spot.
+		pinLayer = document.createElement("div");
+		pinLayer.className = "pc-pin-layer";
+		contentEl.appendChild(pinLayer);
+		pinLayer.addEventListener("click", handleContentClick);
+	}
+
+	function destroyPinLayer() {
+		if (pinLayer) {
+			pinLayer.removeEventListener("click", handleContentClick);
+			pinLayer.remove();
+			pinLayer = null;
+		}
+		contentEl = null;
+	}
+
+	function scrollToRatio(ratio) {
+		if (!ratio) return;
+		var max = Math.max(
+			0,
+			document.documentElement.scrollHeight - window.innerHeight
+		);
+		window.scrollTo(0, Math.round(ratio * max));
+	}
+
+	// ===== Frame Role =====
+
+	function activateFrame(nextViewport, scrollRatio) {
+		viewport = nextViewport === "mobile" ? "mobile" : "desktop";
+		modeActive = true;
+		document.body.classList.add("pc-mode-active");
+		closeBubble();
+		comments = [];
+		destroyPinLayer();
+		createPinLayer();
+		if (pinLayer) {
+			loadComments();
+		}
+		scrollToRatio(scrollRatio);
+	}
+
+	function initFrame() {
+		document.documentElement.classList.add("pc-frame-root");
+		document.body.classList.add("pc-frame");
+
+		window.addEventListener("message", function (e) {
+			if (e.origin !== ORIGIN) return;
+			var msg = e.data;
+			if (!msg || "object" !== typeof msg) return;
+
+			if ("pc:activate" === msg.type) {
+				activateFrame(msg.viewport, msg.scrollRatio);
+			} else if ("pc:viewport" === msg.type) {
+				// Width change happens on the host; only the data set changes here.
+				activateFrame(msg.viewport, 0);
+			}
+		});
+
+		// Keep the frame on the commented document.
+		document.addEventListener(
+			"click",
+			function (e) {
+				var link = e.target.closest("a");
+				if (link && !link.closest(".pc-bubble")) {
+					e.preventDefault();
+				}
+			},
+			true
+		);
+
+		document.addEventListener("keydown", function (e) {
+			if ("Escape" !== e.key) return;
+			if (activeBubble) {
+				closeBubble();
+			} else {
+				postToHost({ type: "pc:exit" });
+			}
+		});
+
+		postToHost({ type: "pc:ready" });
+	}
+
+	function postToHost(msg) {
+		if (window.parent && window.parent !== window) {
+			window.parent.postMessage(msg, ORIGIN);
+		}
+	}
+
+	// ===== Host Role: fixed-width stage =====
+
+	var stage = null;
+	var stageInner = null;
+	var stageFrame = null;
+	var frameReady = false;
+	var frameTimer = null;
+	var hostScrollTop = 0;
+
+	function frameUrl() {
+		var url = window.location.href.split("#")[0];
+		url += (url.indexOf("?") === -1 ? "?" : "&") + "pc_frame=1";
+		return url;
+	}
+
+	function hostScrollRatio() {
+		var max = Math.max(
+			1,
+			document.documentElement.scrollHeight - window.innerHeight
+		);
+		return Math.min(1, window.pageYOffset / max);
+	}
+
+	function applyStageWidth() {
+		if (stageInner) {
+			stageInner.style.width = viewportWidth() + "px";
+		}
+	}
+
+	function postToFrame(msg) {
+		if (stageFrame && stageFrame.contentWindow) {
+			stageFrame.contentWindow.postMessage(msg, ORIGIN);
+		}
+	}
+
+	function openStage() {
+		if (!stage) return;
+		applyStageWidth();
+		stage.setAttribute("aria-hidden", "false");
+		stage.dataset.scrollRatio = hostScrollRatio();
+
+		// Only the frame scrolls from here on.
+		hostScrollTop = window.pageYOffset;
+		document.documentElement.classList.add("pc-mode-lock");
+
+		frameReady = false;
+		stageFrame.src = frameUrl();
+
+		// A security plugin denying framing would leave us with a blank stage.
+		window.clearTimeout(frameTimer);
+		frameTimer = window.setTimeout(function () {
+			if (modeActive && !frameReady) {
+				alert(
+					i18n.frameError || "The page could not be loaded in comment mode."
+				);
+				toggleMode();
+			}
+		}, 8000);
+	}
+
+	function closeStage() {
+		if (!stage) return;
+		window.clearTimeout(frameTimer);
+		frameReady = false;
+		stage.setAttribute("aria-hidden", "true");
+		stageFrame.removeAttribute("src");
+		document.documentElement.classList.remove("pc-mode-lock");
+		window.scrollTo(0, hostScrollTop);
+	}
+
+	// ===== Viewport Switch (desktop / mobile) =====
+
+	function updateViewportButtons() {
+		var buttons = document.querySelectorAll(".pc-viewport-btn");
+		for (var i = 0; i < buttons.length; i++) {
+			var isActive = buttons[i].dataset.viewport === viewport;
+			buttons[i].classList.toggle("is-active", isActive);
+			buttons[i].setAttribute("aria-pressed", isActive ? "true" : "false");
+		}
+		document.body.classList.toggle("pc-viewport-mobile", viewport === "mobile");
+	}
+
+	function setViewport(value) {
+		if (value !== "desktop" && value !== "mobile") return;
+		if (value === viewport) return;
+
+		viewport = value;
+		storeViewport(viewport);
+		updateViewportButtons();
+
+		if (!modeActive) return;
+
+		// Resizing the frame changes its viewport, so the theme re-runs its media
+		// queries. The frame then swaps to the comments of that viewport.
+		applyStageWidth();
+		postToFrame({ type: "pc:viewport", viewport: viewport });
+	}
+
 	// ===== Toggle Comment Mode =====
 
 	function toggleMode() {
 		modeActive = !modeActive;
 		var btn = document.getElementById("pc-toggle-btn");
 		var label = btn.querySelector(".pc-toggle-label");
-		var overlay = document.getElementById("pc-overlay");
 
 		if (modeActive) {
 			document.body.classList.add("pc-mode-active");
 			btn.setAttribute("aria-pressed", "true");
 			label.textContent = i18n.exitCommentMode || "Exit Comment Mode";
-			overlay.setAttribute("aria-hidden", "false");
-			contentEl = findContentEl();
-			if (contentEl) {
-				// Create a transparent pin layer over the content.
-				// This constrains pin coordinates to a fixed width without
-				// changing the website's layout.
-				pinLayer = document.createElement("div");
-				pinLayer.className = "pc-pin-layer";
-				pinLayer.style.width = contentWidth + "px";
-				contentEl.appendChild(pinLayer);
-				// Prevent the page from shrinking below the content width.
-				document.body.style.minWidth = contentWidth + "px";
-				pinLayer.addEventListener("click", handleContentClick);
-				loadComments();
-			}
+			openStage();
 		} else {
 			document.body.classList.remove("pc-mode-active");
 			btn.setAttribute("aria-pressed", "false");
 			label.textContent = i18n.commentMode || "Comment Mode";
-			overlay.setAttribute("aria-hidden", "true");
-			closeBubble();
-			document.body.style.minWidth = "";
-			if (pinLayer) {
-				pinLayer.removeEventListener("click", handleContentClick);
-				pinLayer.remove();
-				pinLayer = null;
-			}
-			contentEl = null;
+			closeStage();
 		}
 	}
 
-	// ===== Init =====
-
-	function init() {
+	function initHost() {
 		var btn = document.getElementById("pc-toggle-btn");
 		if (!btn) return;
+
+		stage = document.getElementById("pc-stage");
+		stageInner = document.getElementById("pc-stage-inner");
+		stageFrame = document.getElementById("pc-stage-frame");
 
 		btn.addEventListener("click", function (e) {
 			e.preventDefault();
 			toggleMode();
 		});
 
-		// ESC to close bubble.
-		document.addEventListener("keydown", function (e) {
-			if (e.key === "Escape") {
-				if (activeBubble) {
-					closeBubble();
-				} else if (modeActive) {
-					toggleMode();
-				}
+		updateViewportButtons();
+
+		var viewportButtons = document.querySelectorAll(".pc-viewport-btn");
+		for (var i = 0; i < viewportButtons.length; i++) {
+			viewportButtons[i].addEventListener("click", function (e) {
+				e.preventDefault();
+				setViewport(this.dataset.viewport);
+			});
+		}
+
+		window.addEventListener("message", function (e) {
+			if (e.origin !== ORIGIN) return;
+			var msg = e.data;
+			if (!msg || "object" !== typeof msg) return;
+
+			if ("pc:ready" === msg.type) {
+				frameReady = true;
+				window.clearTimeout(frameTimer);
+				// Hand over keyboard scrolling (arrows, space, page up/down).
+				stageFrame.focus();
+				postToFrame({
+					type: "pc:activate",
+					viewport: viewport,
+					scrollRatio: parseFloat(stage.dataset.scrollRatio) || 0,
+				});
+			} else if ("pc:exit" === msg.type && modeActive) {
+				toggleMode();
 			}
 		});
+
+		document.addEventListener("keydown", function (e) {
+			if ("Escape" === e.key && modeActive) {
+				toggleMode();
+			}
+		});
+	}
+
+	// ===== Init =====
+
+	function init() {
+		if (isFrame) {
+			initFrame();
+		} else {
+			initHost();
+		}
 	}
 
 	if (document.readyState === "loading") {
