@@ -57,7 +57,7 @@ Deleting the plugin via the WordPress admin will drop the custom database table 
 
 ## Author
 
-**Tristan Kappel** — [https://tristankappel.com](https://tristankappel.com)
+**Tristan Kappel** — [https://tristankappel.de](https://tristankappel.de)
 
 ## License
 
