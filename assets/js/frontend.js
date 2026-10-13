@@ -1010,6 +1010,54 @@
 
 	// ===== Frame Role =====
 
+	// Pin Y positions are percentages of the content height, so pins are only
+	// reproducible when the page has its full, final height. Lazy images would
+	// otherwise leave it shorter after a reload than when the pin was placed.
+	function whenLayoutSettled(cb) {
+		var finished = false;
+		function finish() {
+			if (finished) return;
+			finished = true;
+			cb();
+		}
+
+		var waits = [];
+		var imgs = document.querySelectorAll("img");
+		for (var i = 0; i < imgs.length; i++) {
+			var img = imgs[i];
+			if (img.getAttribute("loading") === "lazy") {
+				img.setAttribute("loading", "eager");
+			}
+			if (!img.complete) {
+				waits.push(
+					new Promise(function (resolve) {
+						img.addEventListener("load", resolve, { once: true });
+						img.addEventListener("error", resolve, { once: true });
+					})
+				);
+			}
+		}
+		if (document.readyState !== "complete") {
+			waits.push(
+				new Promise(function (resolve) {
+					window.addEventListener("load", resolve, { once: true });
+				})
+			);
+		}
+		if (document.fonts && document.fonts.ready) {
+			waits.push(document.fonts.ready);
+		}
+
+		Promise.all(waits).then(function () {
+			// Let the layout settle after the last image/font.
+			window.setTimeout(finish, 150);
+		});
+		// Never block comment mode on a broken resource.
+		window.setTimeout(finish, 8000);
+	}
+
+	var activationToken = 0;
+
 	function activateFrame(nextViewport, scrollRatio) {
 		viewport = nextViewport === "mobile" ? "mobile" : "desktop";
 		modeActive = true;
@@ -1017,11 +1065,16 @@
 		closeBubble();
 		comments = [];
 		destroyPinLayer();
-		createPinLayer();
-		if (pinLayer) {
-			loadComments();
-		}
-		scrollToRatio(scrollRatio);
+
+		var token = ++activationToken;
+		whenLayoutSettled(function () {
+			if (token !== activationToken) return;
+			createPinLayer();
+			if (pinLayer) {
+				loadComments();
+			}
+			scrollToRatio(scrollRatio);
+		});
 	}
 
 	function initFrame() {
