@@ -13,7 +13,8 @@ global $wpdb;
 
 require_once plugin_dir_path( __FILE__ ) . 'includes/class-pc-uploads.php';
 
-$table = $wpdb->prefix . 'pinned_comments';
+$table       = $wpdb->prefix . 'pinned_comments';
+$reads_table = $wpdb->prefix . 'pc_comment_reads';
 
 // Remove the uploaded images before dropping the table.
 $rows = $wpdb->get_col( "SELECT attachments FROM $table WHERE attachments IS NOT NULL AND attachments != ''" );
@@ -25,6 +26,7 @@ foreach ( (array) $rows as $row ) {
 }
 
 $wpdb->query( "DROP TABLE IF EXISTS $table" );
+$wpdb->query( "DROP TABLE IF EXISTS $reads_table" );
 
 delete_option( 'pc_version' );
 delete_option( 'pc_db_version' );

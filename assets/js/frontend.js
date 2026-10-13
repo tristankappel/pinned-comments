@@ -8,7 +8,8 @@
 	var data = window.pcData || {};
 	var ajaxUrl = data.ajaxUrl;
 	var nonce = data.nonce;
-	var postId = data.postId;
+	// wp_localize_script stringifies scalars; thread data carries numeric ids.
+	var postId = parseInt(data.postId, 10) || 0;
 	var isLoggedIn = data.isLoggedIn;
 	var currentUserId = data.userId;
 	var contentWidth = data.contentWidth || 800;
@@ -27,6 +28,8 @@
 	var pinLayer = null;
 	var activeBubble = null;
 	var activePinId = null;
+	var newCommentPin = null;
+	var newCommentBubble = null;
 	var viewport = readStoredViewport();
 
 	// ===== Helpers =====
@@ -326,8 +329,60 @@
 				if (requestedViewport !== viewport || !pinLayer) return;
 				comments = res.data.comments || [];
 				renderPins();
+				postThreadSummaries();
 			}
 		);
+	}
+
+	function refreshThreadMeta() {
+		var replies = {};
+		for (var i = 0; i < comments.length; i++) {
+			var c = comments[i];
+			if (c.parentId !== 0) {
+				if (!replies[c.parentId]) replies[c.parentId] = [];
+				replies[c.parentId].push(c);
+			}
+		}
+
+		for (var j = 0; j < comments.length; j++) {
+			var root = comments[j];
+			if (root.parentId !== 0) continue;
+			var last = root.createdAt;
+			var count = 0;
+			var list = replies[root.id] || [];
+			for (var k = 0; k < list.length; k++) {
+				if (list[k].createdAt > last) {
+					last = list[k].createdAt;
+				}
+				count++;
+			}
+			root.lastActivityAt = last;
+			root.replyCount = count;
+		}
+	}
+
+	function postThreadSummaries() {
+		refreshThreadMeta();
+		var threads = [];
+		for (var i = 0; i < comments.length; i++) {
+			var c = comments[i];
+			if (c.parentId === 0) {
+				threads.push({
+					id: c.id,
+					postId: c.postId,
+					authorName: c.authorName,
+					authorAvatar: c.authorAvatar,
+					excerpt: c.content,
+					lastActivityAt: c.lastActivityAt || c.createdAt,
+					unread: !!c.unread,
+					replyCount: c.replyCount || 0,
+					xPosition: c.xPosition,
+					yPosition: c.yPosition,
+					viewport: c.viewport,
+				});
+			}
+		}
+		postToHost({ type: "pc:threads", threads: threads });
 	}
 
 	// ===== Render Pins =====
@@ -371,9 +426,28 @@
 
 	// ===== Open Thread (Comment Bubble) =====
 
+	function markThreadRead(pinId) {
+		if (!isLoggedIn) return;
+
+		// Update local state immediately for a responsive UI.
+		for (var i = 0; i < comments.length; i++) {
+			if (comments[i].id === pinId) {
+				comments[i].unread = false;
+				break;
+			}
+		}
+		postThreadSummaries();
+
+		ajax("pc_mark_read", { comment_id: pinId }, function (err, res) {
+			if (err || !res || !res.success) return;
+			// Server already recorded; local state is consistent.
+		});
+	}
+
 	function openThread(pinId, pinEl) {
 		closeBubble();
 		activePinId = pinId;
+		markThreadRead(pinId);
 
 		// Mark pin active.
 		var allPins = pinLayer.querySelectorAll(".pc-pin");
@@ -662,6 +736,7 @@
 							openThread(activePinId, pinEl);
 						}
 					}
+					postThreadSummaries();
 				},
 				uploader
 					? { files: uploader.files(), removals: uploader.removals() }
@@ -742,6 +817,7 @@
 							openThread(activePinId, pinEl);
 						}
 					}
+					postThreadSummaries();
 				},
 				uploader ? { files: uploader.files() } : null
 			);
@@ -802,6 +878,7 @@
 						}
 					}
 				}
+				postThreadSummaries();
 			}
 		);
 	}
@@ -838,6 +915,7 @@
 
 	function showNewCommentForm(x, y) {
 		closeBubble();
+		closeNewCommentForm();
 
 		// Create temporary pin.
 		var pin = document.createElement("div");
@@ -848,6 +926,7 @@
 		dot.className = "pc-pin-dot";
 		pin.appendChild(dot);
 		pinLayer.appendChild(pin);
+		newCommentPin = pin;
 
 		// Create bubble with new comment form.
 		var bubble = document.createElement("div");
@@ -925,8 +1004,9 @@
 					}
 					comments.push(res.data.comment);
 					if (uploader) uploader.reset();
-					closeNewCommentForm(pin, bubble);
+					closeNewCommentForm();
 					renderPins();
+					postThreadSummaries();
 				},
 				uploader ? { files: uploader.files() } : null
 			);
@@ -947,6 +1027,7 @@
 
 		pinLayer.appendChild(bubble);
 		activeBubble = bubble;
+		newCommentBubble = bubble;
 
 		textarea.focus();
 
@@ -969,10 +1050,12 @@
 		}, 0);
 	}
 
-	function closeNewCommentForm(pin, bubble) {
-		if (pin) pin.remove();
-		if (bubble) bubble.remove();
-		if (activeBubble === bubble) activeBubble = null;
+	function closeNewCommentForm() {
+		if (newCommentPin) newCommentPin.remove();
+		if (newCommentBubble) newCommentBubble.remove();
+		if (activeBubble === newCommentBubble) activeBubble = null;
+		newCommentPin = null;
+		newCommentBubble = null;
 	}
 
 	// ===== Pin Layer (inside the frame) =====
@@ -1091,6 +1174,15 @@
 			} else if ("pc:viewport" === msg.type) {
 				// Width change happens on the host; only the data set changes here.
 				activateFrame(msg.viewport, 0);
+			} else if ("pc:openThread" === msg.type) {
+				closeBubble();
+				closeNewCommentForm();
+				if (!pinLayer) return;
+				var pinEl = pinLayer.querySelector('.pc-pin[data-id="' + msg.commentId + '"]');
+				if (pinEl) {
+					pinEl.scrollIntoView({ behavior: "smooth", block: "center" });
+					openThread(msg.commentId, pinEl);
+				}
 			}
 		});
 
@@ -1132,6 +1224,17 @@
 	var frameReady = false;
 	var frameTimer = null;
 	var hostScrollTop = 0;
+	var threadPanel = null;
+	var threadList = null;
+	var panelToggleBtn = null;
+	var panelTitle = null;
+	var currentPostId = postId;
+	var currentPageThreads = [];
+	var otherThreads = [];
+	var currentPageThreadsLoaded = false;
+	var pendingOpenThreadId = null;
+	var pendingOpenViewport = null;
+	var PANEL_COLLAPSED_KEY = "pcThreadPanelCollapsed";
 
 	function frameUrl() {
 		var url = window.location.href.split("#")[0];
@@ -1169,6 +1272,10 @@
 		hostScrollTop = window.pageYOffset;
 		document.documentElement.classList.add("pc-mode-lock");
 
+		currentPostId = postId;
+		currentPageThreads = [];
+		currentPageThreadsLoaded = false;
+
 		frameReady = false;
 		stageFrame.src = frameUrl();
 
@@ -1192,6 +1299,259 @@
 		stageFrame.removeAttribute("src");
 		document.documentElement.classList.remove("pc-mode-lock");
 		window.scrollTo(0, hostScrollTop);
+		if (threadPanel) {
+			threadPanel.setAttribute("aria-hidden", "true");
+		}
+	}
+
+	// ===== Thread Panel (Figma-style overview) =====
+
+	function excerpt(text, max) {
+		if (!text) return "";
+		if (text.length <= max) return text;
+		return text.substring(0, max).replace(/\s+\S*$/, "") + "…";
+	}
+
+	function renderThreadItem(t) {
+		var item = document.createElement("button");
+		item.type = "button";
+		item.className = "pc-thread-item";
+		if (t.unread) item.classList.add("is-unread");
+		item.dataset.threadId = t.id;
+
+		var meta = document.createElement("div");
+		meta.className = "pc-thread-meta";
+
+		var dot = document.createElement("span");
+		dot.className = "pc-thread-unread-dot";
+		dot.setAttribute("aria-hidden", "true");
+		meta.appendChild(dot);
+
+		var time = document.createElement("span");
+		time.className = "pc-thread-time";
+		time.textContent = formatTime(t.lastActivityAt);
+		meta.appendChild(time);
+
+		if (t.replyCount > 0) {
+			var count = document.createElement("span");
+			count.className = "pc-thread-reply-count";
+			count.textContent = t.replyCount + (t.replyCount === 1 ? " reply" : " replies");
+			meta.appendChild(count);
+		}
+
+		var head = document.createElement("div");
+		head.className = "pc-thread-head";
+
+		if (t.authorAvatar) {
+			var avatar = document.createElement("img");
+			avatar.className = "pc-thread-avatar";
+			avatar.src = t.authorAvatar;
+			avatar.alt = "";
+			head.appendChild(avatar);
+		}
+
+		var author = document.createElement("span");
+		author.className = "pc-thread-author";
+		author.textContent = t.authorName;
+		head.appendChild(author);
+
+		var body = document.createElement("div");
+		body.className = "pc-thread-body";
+		body.textContent = excerpt(t.excerpt, 120);
+
+		item.appendChild(meta);
+		item.appendChild(head);
+		item.appendChild(body);
+
+		// For threads on other pages show the page title as context.
+		if (t.postId !== currentPostId && t.postTitle) {
+			var page = document.createElement("div");
+			page.className = "pc-thread-page";
+			page.textContent = t.postTitle;
+			item.appendChild(page);
+		}
+
+		item.addEventListener("click", function () {
+			var id = parseInt(item.dataset.threadId, 10);
+			openThreadFromPanel(id);
+		});
+
+		return item;
+	}
+
+	function sortThreadsDesc(threads) {
+		return threads.slice().sort(function (a, b) {
+			return (b.lastActivityAt || "").localeCompare(a.lastActivityAt || "");
+		});
+	}
+
+	function renderSection(label, threads) {
+		if (!threads.length) return;
+		var header = document.createElement("div");
+		header.className = "pc-thread-section";
+		header.textContent = label;
+		threadList.appendChild(header);
+
+		threads = sortThreadsDesc(threads);
+		for (var i = 0; i < threads.length; i++) {
+			threadList.appendChild(renderThreadItem(threads[i]));
+		}
+	}
+
+	function updatePanelHeader() {
+		if (!panelTitle) return;
+		var label = viewport === "mobile"
+			? (i18n.mobile || "Mobile")
+			: (i18n.desktop || "Desktop");
+		panelTitle.textContent = (i18n.comments || "Comments") + " (" + label + ")";
+	}
+
+	function filterByViewport(threads) {
+		return threads.filter(function (t) {
+			return t.viewport === viewport;
+		});
+	}
+
+	function buildThreadPanel() {
+		if (!threadList) return;
+		threadList.innerHTML = "";
+		updatePanelHeader();
+
+		var current = [];
+		var others = [];
+		for (var i = 0; i < currentPageThreads.length; i++) {
+			if (currentPageThreads[i].postId === currentPostId) {
+				current.push(currentPageThreads[i]);
+			}
+		}
+		for (var j = 0; j < otherThreads.length; j++) {
+			if (otherThreads[j].postId !== currentPostId) {
+				others.push(otherThreads[j]);
+			}
+		}
+
+		renderSection(i18n.onThisPage || "On this page", filterByViewport(current));
+		renderSection(i18n.otherPages || "Other pages", filterByViewport(others));
+
+		if (!current.length && !others.length) {
+			var empty = document.createElement("div");
+			empty.className = "pc-thread-empty";
+			empty.textContent = i18n.noComments || "No comments yet.";
+			threadList.appendChild(empty);
+		}
+	}
+
+	function renderThreadPanel(threads) {
+		currentPageThreads = threads || [];
+		currentPageThreadsLoaded = true;
+		buildThreadPanel();
+	}
+
+	function loadAllThreads() {
+		ajax("pc_load_all_threads", {}, function (err, res) {
+			if (err || !res || !res.success) return;
+			otherThreads = res.data.threads || [];
+			if (currentPageThreadsLoaded) {
+				buildThreadPanel();
+			}
+		});
+	}
+
+	function navigateToThread(thread) {
+		currentPostId = thread.postId;
+		viewport = thread.viewport === "mobile" ? "mobile" : "desktop";
+		storeViewport(viewport);
+		updateViewportButtons();
+		updatePanelHeader();
+		applyStageWidth();
+
+		currentPageThreads = [];
+		currentPageThreadsLoaded = false;
+		pendingOpenThreadId = thread.id;
+		pendingOpenViewport = viewport;
+
+		window.clearTimeout(frameTimer);
+		frameReady = false;
+
+		var url = thread.postUrl || window.location.href.split("#")[0];
+		url += (url.indexOf("?") === -1 ? "?" : "&") + "pc_frame=1";
+		stageFrame.src = url;
+
+		frameTimer = window.setTimeout(function () {
+			if (modeActive && !frameReady) {
+				alert(
+					i18n.frameError || "The page could not be loaded in comment mode."
+				);
+				toggleMode();
+			}
+		}, 8000);
+	}
+
+	function openThreadFromPanel(threadId) {
+		var thread = null;
+		for (var i = 0; i < currentPageThreads.length; i++) {
+			if (currentPageThreads[i].id === threadId) {
+				thread = currentPageThreads[i];
+				break;
+			}
+		}
+		if (!thread) {
+			for (var j = 0; j < otherThreads.length; j++) {
+				if (otherThreads[j].id === threadId) {
+					thread = otherThreads[j];
+					break;
+				}
+			}
+		}
+		if (!thread) return;
+
+		if (thread.postId === currentPostId && thread.viewport === viewport) {
+			postToFrame({ type: "pc:openThread", commentId: thread.id });
+			return;
+		}
+
+		navigateToThread(thread);
+	}
+
+	function applyPanelCollapsedState() {
+		if (!threadPanel || !panelToggleBtn) return;
+		var collapsed = false;
+		try {
+			collapsed = window.localStorage.getItem(PANEL_COLLAPSED_KEY) === "1";
+		} catch (e) {
+			collapsed = false;
+		}
+		threadPanel.classList.toggle("is-collapsed", collapsed);
+		panelToggleBtn.textContent = collapsed ? "‹" : "›";
+		panelToggleBtn.setAttribute(
+			"aria-label",
+			collapsed
+				? (i18n.expandPanel || "Expand panel")
+				: (i18n.collapsePanel || "Collapse panel")
+		);
+	}
+
+	function togglePanelCollapsed() {
+		if (!threadPanel || !panelToggleBtn) return;
+		var collapsed = threadPanel.classList.toggle("is-collapsed");
+		try {
+			window.localStorage.setItem(PANEL_COLLAPSED_KEY, collapsed ? "1" : "0");
+		} catch (e) {
+			/* ignore */
+		}
+		panelToggleBtn.textContent = collapsed ? "‹" : "›";
+		panelToggleBtn.setAttribute(
+			"aria-label",
+			collapsed
+				? (i18n.expandPanel || "Expand panel")
+				: (i18n.collapsePanel || "Collapse panel")
+		);
+	}
+
+	function showThreadPanel() {
+		if (threadPanel) {
+			threadPanel.setAttribute("aria-hidden", "false");
+		}
 	}
 
 	// ===== Viewport Switch (desktop / mobile) =====
@@ -1213,12 +1573,15 @@
 		viewport = value;
 		storeViewport(viewport);
 		updateViewportButtons();
+		updatePanelHeader();
 
 		if (!modeActive) return;
 
 		// Resizing the frame changes its viewport, so the theme re-runs its media
 		// queries. The frame then swaps to the comments of that viewport.
 		applyStageWidth();
+		currentPageThreads = [];
+		currentPageThreadsLoaded = false;
 		postToFrame({ type: "pc:viewport", viewport: viewport });
 	}
 
@@ -1249,6 +1612,20 @@
 		stage = document.getElementById("pc-stage");
 		stageInner = document.getElementById("pc-stage-inner");
 		stageFrame = document.getElementById("pc-stage-frame");
+		threadPanel = document.getElementById("pc-thread-panel");
+		threadList = document.getElementById("pc-thread-list");
+		panelToggleBtn = document.getElementById("pc-thread-panel-toggle");
+		panelTitle = document.getElementById("pc-thread-panel-title");
+
+		updatePanelHeader();
+
+		if (panelToggleBtn) {
+			applyPanelCollapsedState();
+			panelToggleBtn.addEventListener("click", function (e) {
+				e.stopPropagation();
+				togglePanelCollapsed();
+			});
+		}
 
 		btn.addEventListener("click", function (e) {
 			e.preventDefault();
@@ -1275,11 +1652,33 @@
 				window.clearTimeout(frameTimer);
 				// Hand over keyboard scrolling (arrows, space, page up/down).
 				stageFrame.focus();
+
+				// If we are navigating to a thread on another page, use its viewport.
+				if (pendingOpenViewport) {
+					viewport = pendingOpenViewport;
+					storeViewport(viewport);
+					updateViewportButtons();
+					updatePanelHeader();
+					applyStageWidth();
+				}
+
 				postToFrame({
 					type: "pc:activate",
 					viewport: viewport,
 					scrollRatio: parseFloat(stage.dataset.scrollRatio) || 0,
 				});
+				showThreadPanel();
+				loadAllThreads();
+			} else if ("pc:threads" === msg.type) {
+				renderThreadPanel(msg.threads);
+				if (pendingOpenThreadId) {
+					postToFrame({
+						type: "pc:openThread",
+						commentId: pendingOpenThreadId,
+					});
+					pendingOpenThreadId = null;
+					pendingOpenViewport = null;
+				}
 			} else if ("pc:exit" === msg.type && modeActive) {
 				toggleMode();
 			}

@@ -3,7 +3,7 @@
  * Plugin Name:       Pinned Comments
  * Plugin URI:        https://tristankappel.com
  * Description:       Figma-style pinned comments for posts and pages. Enter comment mode, click anywhere on the content, and drop a pin with a comment thread.
- * Version:           1.3.2
+ * Version:           1.3.3
  * Author:            Tristan Kappel
  * Author URI:        https://tristankappel.com
  * License:           GPL-2.0-or-later
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'PC_VERSION', '1.3.2' );
+define( 'PC_VERSION', '1.3.3' );
 define( 'PC_PLUGIN_FILE', __FILE__ );
 define( 'PC_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'PC_PLUGIN_URL', plugin_dir_url( __FILE__ ) );

@@ -12,6 +12,8 @@ Pinned Comments lets users enter a "Comment Mode" on any post or page, click any
 - **Pinned comments** — Click on the content to drop a pin at that exact position. Comments are stored with percentage-based coordinates so they stay in the right spot across screen sizes.
 - **Fixed-width stage** — Comment Mode renders the page inside a same-origin frame whose viewport is locked to the configured wrapper width. The theme's media queries evaluate against that width, so the layout — and every pin position — is pixel-identical on any screen. Screens narrower than the wrapper scroll instead of shrinking it.
 - **Desktop & mobile viewports** — A switch next to the Comment Mode button toggles between the desktop and the mobile variant. Switching resizes the frame viewport (real mobile layout) and loads that viewport's comments. Each viewport has its own wrapper width and its own set of comments; a comment always belongs to exactly one viewport.
+- **Comment overview panel** — A collapsible sidebar docked to the right (expanded by default, state remembered per browser). Threads are sorted by latest activity, so a fresh reply moves an old thread to the top, just like in Figma. Only threads of the active viewport are listed, and the header shows "Comments (Desktop)" or "Comments (Mobile)". The list is grouped into "On this page" and "Other pages"; clicking a thread on another page loads that page in comment mode at the matching viewport and opens the thread at its pin.
+- **Unread indicator** — A dot in the accent color marks threads with activity you have not seen yet. Opening a thread marks it as read for your user; your own comments and replies count as read.
 - **Threaded replies** — Any logged-in user can reply to an existing comment thread.
 - **Image attachments** — Up to 5 images (JPG, PNG, GIF, WebP, max 5 MB each) per comment or reply, with thumbnail previews before sending and a click-to-open grid in the thread. Images can be added and removed while editing a comment. Only users with the `upload_files` capability see the upload button. Files are stored in `wp-content/uploads/pinned-comments/<year>/<month>/` — deliberately outside the media library — and are deleted together with their comment.
 - **Edit & delete own comments** — Users can edit or delete their own comments at any time. Deleting a top-level comment also removes all replies.
@@ -33,7 +35,8 @@ Pinned Comments lets users enter a "Comment Mode" on any post or page, click any
 4. Type your comment, optionally attach up to 5 images, and hit **Send** (or Ctrl/Cmd+Enter).
 5. Click any existing pin to view the thread, reply, or edit/delete your own comments.
 6. Use the **Desktop / Mobile** switch to move between the two variants. Only the comments of the selected viewport are shown, and new pins are stored for that viewport. The choice is remembered per browser.
-7. Press **ESC** to close a thread or exit comment mode.
+7. Use the right-hand overview to jump between threads, including threads on other pages. Collapse it with the arrow button in its header.
+8. Press **ESC** to close a thread or exit comment mode.
 
 ## Settings
 
@@ -53,7 +56,7 @@ Pinned Comments lets users enter a "Comment Mode" on any post or page, click any
 
 ## Uninstall
 
-Deleting the plugin via the WordPress admin will drop the custom database table and remove all options.
+Deleting the plugin via the WordPress admin will drop the custom database tables (comments and read states), remove all options and delete uploaded images.
 
 ## Author
 

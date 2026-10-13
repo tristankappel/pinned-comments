@@ -142,6 +142,7 @@ class PC_Frontend {
                 'desktop'          => __( 'Desktop', 'pinned-comments' ),
                 'mobile'           => __( 'Mobile', 'pinned-comments' ),
                 'comment'          => __( 'Comment', 'pinned-comments' ),
+                'comments'         => __( 'Comments', 'pinned-comments' ),
                 'reply'            => __( 'Reply', 'pinned-comments' ),
                 'send'             => __( 'Send', 'pinned-comments' ),
                 'cancel'           => __( 'Cancel', 'pinned-comments' ),
@@ -157,6 +158,11 @@ class PC_Frontend {
                 'frameError'       => __( 'The page could not be loaded in comment mode.', 'pinned-comments' ),
                 'addImages'        => __( 'Add images', 'pinned-comments' ),
                 'removeImage'      => __( 'Remove image', 'pinned-comments' ),
+                'noComments'       => __( 'No comments yet.', 'pinned-comments' ),
+                'onThisPage'       => __( 'On this page', 'pinned-comments' ),
+                'otherPages'       => __( 'Other pages', 'pinned-comments' ),
+                'collapsePanel'    => __( 'Collapse panel', 'pinned-comments' ),
+                'expandPanel'      => __( 'Expand panel', 'pinned-comments' ),
                 'maxImagesReached' => sprintf(
                     /* translators: %d: maximum number of images. */
                     __( 'A maximum of %d images per comment.', 'pinned-comments' ),
@@ -197,6 +203,15 @@ class PC_Frontend {
             <div id="pc-stage-inner">
                 <iframe id="pc-stage-frame" title="<?php esc_attr_e( 'Comment mode preview', 'pinned-comments' ); ?>"></iframe>
             </div>
+        </div>
+        <div id="pc-thread-panel" aria-hidden="true" aria-label="<?php esc_attr_e( 'Comment threads', 'pinned-comments' ); ?>">
+            <div class="pc-thread-panel-header">
+                <span id="pc-thread-panel-title"><?php esc_html_e( 'Comments', 'pinned-comments' ); ?></span>
+                <button id="pc-thread-panel-toggle" type="button" class="pc-thread-panel-toggle" aria-label="<?php esc_attr_e( 'Collapse panel', 'pinned-comments' ); ?>">
+                    ›
+                </button>
+            </div>
+            <div id="pc-thread-list" class="pc-thread-list"></div>
         </div>
         <?php
     }

@@ -163,6 +163,185 @@ html.pc-mode-lock body::-webkit-scrollbar {
     background: #fff;
 }
 
+/* ===== Thread Panel (Figma-style overview) ===== */
+#pc-thread-panel {
+    display: none;
+    position: fixed;
+    top: 0;
+    right: 0;
+    width: 280px;
+    height: 100%;
+    z-index: 99995;
+    background: #fff;
+    border-left: 1px solid rgba(0, 0, 0, 0.1);
+    box-shadow: -4px 0 24px rgba(0, 0, 0, 0.12);
+    flex-direction: column;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+body.pc-mode-active #pc-thread-panel {
+    display: flex;
+}
+
+.pc-thread-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--pc-accent, #1a73e8);
+    border-bottom: 1px solid #eee;
+    flex-shrink: 0;
+}
+
+.pc-thread-panel-toggle {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 20px;
+    line-height: 1;
+    color: #666;
+    padding: 4px;
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    transition: background 0.12s;
+}
+
+.pc-thread-panel-toggle:hover {
+    background: #f0f0f0;
+    color: #1a1a1a;
+}
+
+#pc-thread-panel.is-collapsed {
+    width: 44px;
+}
+
+#pc-thread-panel.is-collapsed .pc-thread-panel-header span,
+#pc-thread-panel.is-collapsed .pc-thread-list {
+    display: none;
+}
+
+.pc-thread-list {
+    overflow-y: auto;
+    flex: 1;
+}
+
+.pc-thread-section {
+    padding: 8px 16px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: #888;
+    background: #fafafa;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.pc-thread-item {
+    display: block;
+    width: 100%;
+    text-align: left;
+    padding: 12px 16px;
+    border: none;
+    border-bottom: 1px solid #f0f0f0;
+    background: transparent;
+    cursor: pointer;
+    transition: background 0.12s;
+}
+
+.pc-thread-item:hover,
+.pc-thread-item:focus {
+    background: #f7f9fc;
+    outline: none;
+}
+
+.pc-thread-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    color: #999;
+    margin-bottom: 4px;
+}
+
+.pc-thread-unread-dot {
+    display: none;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--pc-accent, #1a73e8);
+    flex-shrink: 0;
+}
+
+.pc-thread-item.is-unread .pc-thread-unread-dot {
+    display: inline-block;
+}
+
+.pc-thread-reply-count {
+    color: #888;
+}
+
+.pc-thread-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 2px;
+}
+
+.pc-thread-avatar {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+
+.pc-thread-author {
+    font-size: 13px;
+    font-weight: 600;
+    color: #1a1a1a;
+}
+
+.pc-thread-body {
+    margin-top: 4px;
+    font-size: 13px;
+    line-height: 1.4;
+    color: #555;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.pc-thread-page {
+    margin-top: 2px;
+    font-size: 11px;
+    color: var(--pc-accent, #1a73e8);
+    font-weight: 500;
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.pc-thread-empty {
+    padding: 24px 16px;
+    text-align: center;
+    color: #999;
+    font-size: 13px;
+}
+
+@media (max-width: 600px) {
+    #pc-thread-panel {
+        width: 220px;
+    }
+}
+
 /* ===== Inside the frame ===== */
 /* Keep the layout viewport exactly at the wrapper width – a visible scrollbar
    would otherwise shrink it and shift every percentage based pin. */

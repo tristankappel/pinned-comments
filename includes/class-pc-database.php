@@ -33,11 +33,22 @@ class PC_Database {
     }
 
     /**
-     * Create the custom table.
+     * Get the read tracking table name.
+     *
+     * @return string
+     */
+    public static function reads_table_name() {
+        global $wpdb;
+        return $wpdb->prefix . 'pc_comment_reads';
+    }
+
+    /**
+     * Create the custom tables.
      */
     public static function create_table() {
         global $wpdb;
-        $table = self::table_name();
+        $table       = self::table_name();
+        $reads_table = self::reads_table_name();
         $charset_collate = $wpdb->get_charset_collate();
 
         $sql = "CREATE TABLE $table (
@@ -57,6 +68,16 @@ class PC_Database {
             KEY parent_id (parent_id),
             KEY user_id (user_id),
             KEY viewport (viewport)
+        ) $charset_collate;
+
+        CREATE TABLE $reads_table (
+            id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+            user_id bigint(20) unsigned NOT NULL,
+            comment_id bigint(20) unsigned NOT NULL,
+            read_at datetime NOT NULL DEFAULT '0000-00-00 00:00:00',
+            PRIMARY KEY (id),
+            UNIQUE KEY user_comment (user_id, comment_id),
+            KEY comment_id (comment_id)
         ) $charset_collate;";
 
         require_once ABSPATH . 'wp-admin/includes/upgrade.php';
@@ -181,6 +202,136 @@ class PC_Database {
                 $id
             )
         );
+    }
+
+    /**
+     * Get the last read timestamp for each root comment of a post/viewport.
+     *
+     * @param int    $post_id  Post ID.
+     * @param int    $user_id  User ID.
+     * @param string $viewport Optional viewport filter ('desktop' or 'mobile').
+     * @return array Map of comment_id => read_at.
+     */
+    public static function get_read_map_for_post( $post_id, $user_id, $viewport = '' ) {
+        global $wpdb;
+        $table       = self::table_name();
+        $reads_table = self::reads_table_name();
+        $viewport    = self::sanitize_viewport( $viewport );
+
+        $rows = $wpdb->get_results(
+            $wpdb->prepare(
+                "SELECT r.comment_id, r.read_at
+                FROM $reads_table r
+                INNER JOIN $table c ON c.id = r.comment_id
+                WHERE c.post_id = %d AND c.viewport = %s AND r.user_id = %d",
+                $post_id,
+                $viewport,
+                $user_id
+            )
+        );
+
+        $map = array();
+        foreach ( $rows as $row ) {
+            $map[ (int) $row->comment_id ] = $row->read_at;
+        }
+        return $map;
+    }
+
+    /**
+     * Get the last read timestamp for every thread a user has seen.
+     *
+     * @param int $user_id User ID.
+     * @return array Map of comment_id => read_at.
+     */
+    public static function get_read_map_for_user( $user_id ) {
+        global $wpdb;
+        $table = self::reads_table_name();
+
+        $rows = $wpdb->get_results(
+            $wpdb->prepare(
+                "SELECT comment_id, read_at FROM $table WHERE user_id = %d",
+                $user_id
+            )
+        );
+
+        $map = array();
+        foreach ( $rows as $row ) {
+            $map[ (int) $row->comment_id ] = $row->read_at;
+        }
+        return $map;
+    }
+
+    /**
+     * Mark a comment thread as read for a user.
+     *
+     * @param int $user_id    User ID.
+     * @param int $comment_id Root comment ID.
+     * @return bool
+     */
+    public static function mark_read( $user_id, $comment_id ) {
+        global $wpdb;
+        $table = self::reads_table_name();
+        $now   = current_time( 'mysql' );
+
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+        $result = $wpdb->query(
+            $wpdb->prepare(
+                "INSERT INTO $table (user_id, comment_id, read_at)
+                VALUES (%d, %d, %s)
+                ON DUPLICATE KEY UPDATE read_at = VALUES(read_at)",
+                $user_id,
+                $comment_id,
+                $now
+            )
+        );
+
+        return false !== $result;
+    }
+
+    /**
+     * Delete read records for a comment thread.
+     *
+     * @param int $comment_id Root comment ID.
+     * @return bool
+     */
+    public static function delete_reads_for_thread( $comment_id ) {
+        global $wpdb;
+        $table = self::reads_table_name();
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+        $wpdb->delete( $table, array( 'comment_id' => $comment_id ), array( '%d' ) );
+        return true;
+    }
+
+    /**
+     * Delete all read records for a post.
+     *
+     * @param int $post_id Post ID.
+     * @return bool
+     */
+    public static function delete_reads_for_post( $post_id ) {
+        global $wpdb;
+        $table       = self::table_name();
+        $reads_table = self::reads_table_name();
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+        $wpdb->query(
+            $wpdb->prepare(
+                "DELETE r FROM $reads_table r
+                INNER JOIN $table c ON c.id = r.comment_id
+                WHERE c.post_id = %d",
+                $post_id
+            )
+        );
+        return true;
+    }
+
+    /**
+     * Delete every read record.
+     */
+    public static function delete_all_reads() {
+        global $wpdb;
+        $table = self::reads_table_name();
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+        $wpdb->query( "DELETE FROM $table" );
     }
 
     /**
@@ -379,6 +530,7 @@ class PC_Database {
         $table = self::table_name();
 
         PC_Uploads::delete_files( self::get_thread_attachments( $id ) );
+        self::delete_reads_for_thread( $id );
 
         // Delete replies.
         $wpdb->delete( $table, array( 'parent_id' => $id ), array( '%d' ) );
@@ -396,6 +548,7 @@ class PC_Database {
         global $wpdb;
         $table = self::table_name();
         PC_Uploads::delete_files( self::get_all_attachments() );
+        self::delete_all_reads();
         return $wpdb->query( "DELETE FROM $table" );
     }
 
@@ -414,6 +567,7 @@ class PC_Database {
             PC_Uploads::delete_files( self::decode_attachments( $row ) );
         }
 
+        self::delete_reads_for_post( $post_id );
         return $wpdb->delete( $table, array( 'post_id' => $post_id ), array( '%d' ) );
     }
 
@@ -439,10 +593,11 @@ class PC_Database {
     /**
      * Format a comment for JSON response.
      *
-     * @param object $comment Comment row object.
+     * @param object $comment     Comment row object.
+     * @param array  $thread_meta Optional metadata for root comments keyed by comment id.
      * @return array
      */
-    public static function format_for_response( $comment ) {
+    public static function format_for_response( $comment, $thread_meta = array() ) {
         $user = get_userdata( $comment->user_id );
 
         $attachments = array();
@@ -453,21 +608,29 @@ class PC_Database {
             );
         }
 
+        $is_root = (int) $comment->parent_id === 0;
+        $meta    = $is_root && isset( $thread_meta[ (int) $comment->id ] )
+            ? $thread_meta[ (int) $comment->id ]
+            : array();
+
         return array(
-            'id'          => (int) $comment->id,
-            'postId'      => (int) $comment->post_id,
-            'userId'      => (int) $comment->user_id,
-            'authorName'  => $user ? $user->display_name : __( 'Unknown', 'pinned-comments' ),
-            'authorAvatar'=> get_avatar_url( $comment->user_id, array( 'size' => 32 ) ),
-            'content'     => $comment->content,
-            'xPosition'   => (float) $comment->x_position,
-            'yPosition'   => (float) $comment->y_position,
-            'viewport'    => self::sanitize_viewport( isset( $comment->viewport ) ? $comment->viewport : 'desktop' ),
-            'attachments' => $attachments,
-            'parentId'    => (int) $comment->parent_id,
-            'createdAt'   => $comment->created_at,
-            'modifiedAt'  => $comment->modified_at,
-            'isOwn'       => (int) $comment->user_id === get_current_user_id(),
+            'id'             => (int) $comment->id,
+            'postId'         => (int) $comment->post_id,
+            'userId'         => (int) $comment->user_id,
+            'authorName'     => $user ? $user->display_name : __( 'Unknown', 'pinned-comments' ),
+            'authorAvatar'   => get_avatar_url( $comment->user_id, array( 'size' => 32 ) ),
+            'content'        => $comment->content,
+            'xPosition'      => (float) $comment->x_position,
+            'yPosition'      => (float) $comment->y_position,
+            'viewport'       => self::sanitize_viewport( isset( $comment->viewport ) ? $comment->viewport : 'desktop' ),
+            'attachments'    => $attachments,
+            'parentId'       => (int) $comment->parent_id,
+            'createdAt'      => $comment->created_at,
+            'modifiedAt'     => $comment->modified_at,
+            'isOwn'          => (int) $comment->user_id === get_current_user_id(),
+            'lastActivityAt' => isset( $meta['lastActivityAt'] ) ? $meta['lastActivityAt'] : $comment->created_at,
+            'unread'         => ! empty( $meta['unread'] ),
+            'replyCount'     => isset( $meta['replyCount'] ) ? (int) $meta['replyCount'] : 0,
         );
     }
 }
