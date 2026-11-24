@@ -42,7 +42,7 @@ class PC_Frontend {
      * @return bool
      */
     public static function is_frame_request() {
-        return isset( $_GET['pc_frame'] ) && '1' === $_GET['pc_frame'];
+        return isset( $_GET['pc_frame'] ) && '1' === $_GET['pc_frame'] && current_user_can( 'manage_options' );
     }
 
     /**
@@ -96,7 +96,9 @@ class PC_Frontend {
      * Enqueue frontend assets on singular posts/pages.
      */
     public function enqueue_assets() {
-        if ( ! is_singular() ) {
+        // Comment mode is an admin-only review tool; regular visitors must
+        // never see or load any of it.
+        if ( ! is_singular() || ! current_user_can( 'manage_options' ) ) {
             return;
         }
 
@@ -180,7 +182,7 @@ class PC_Frontend {
      * this chrome is rendered there.
      */
     public function render_comment_mode_ui() {
-        if ( ! is_singular() || self::is_frame_request() ) {
+        if ( ! is_singular() || ! current_user_can( 'manage_options' ) || self::is_frame_request() ) {
             return;
         }
         ?>

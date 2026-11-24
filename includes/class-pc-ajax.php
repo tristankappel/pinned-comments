@@ -43,6 +43,10 @@ class PC_Ajax {
             wp_send_json_error( array( 'message' => __( 'Invalid post ID.', 'pinned-comments' ) ) );
         }
 
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_send_json_error( array( 'message' => __( 'Insufficient permissions.', 'pinned-comments' ) ) );
+        }
+
         $comments = PC_Database::get_all_for_post( $post_id, $viewport );
 
         // Build thread metadata for root comments: last activity, reply count,
@@ -98,8 +102,8 @@ class PC_Ajax {
     public function create_comment() {
         check_ajax_referer( 'pc_nonce', 'nonce' );
 
-        if ( ! is_user_logged_in() ) {
-            wp_send_json_error( array( 'message' => __( 'You must be logged in to comment.', 'pinned-comments' ) ) );
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_send_json_error( array( 'message' => __( 'Insufficient permissions.', 'pinned-comments' ) ) );
         }
 
         $post_id   = isset( $_POST['post_id'] ) ? absint( $_POST['post_id'] ) : 0;
@@ -157,8 +161,8 @@ class PC_Ajax {
     public function edit_comment() {
         check_ajax_referer( 'pc_nonce', 'nonce' );
 
-        if ( ! is_user_logged_in() ) {
-            wp_send_json_error( array( 'message' => __( 'You must be logged in.', 'pinned-comments' ) ) );
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_send_json_error( array( 'message' => __( 'Insufficient permissions.', 'pinned-comments' ) ) );
         }
 
         $comment_id = isset( $_POST['comment_id'] ) ? absint( $_POST['comment_id'] ) : 0;
@@ -217,8 +221,8 @@ class PC_Ajax {
     public function delete_comment() {
         check_ajax_referer( 'pc_nonce', 'nonce' );
 
-        if ( ! is_user_logged_in() ) {
-            wp_send_json_error( array( 'message' => __( 'You must be logged in.', 'pinned-comments' ) ) );
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_send_json_error( array( 'message' => __( 'Insufficient permissions.', 'pinned-comments' ) ) );
         }
 
         $comment_id = isset( $_POST['comment_id'] ) ? absint( $_POST['comment_id'] ) : 0;
@@ -262,8 +266,8 @@ class PC_Ajax {
     public function mark_read() {
         check_ajax_referer( 'pc_nonce', 'nonce' );
 
-        if ( ! is_user_logged_in() ) {
-            wp_send_json_error( array( 'message' => __( 'You must be logged in.', 'pinned-comments' ) ) );
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_send_json_error( array( 'message' => __( 'Insufficient permissions.', 'pinned-comments' ) ) );
         }
 
         $comment_id = isset( $_POST['comment_id'] ) ? absint( $_POST['comment_id'] ) : 0;
@@ -291,6 +295,10 @@ class PC_Ajax {
      */
     public function load_all_threads() {
         check_ajax_referer( 'pc_nonce', 'nonce' );
+
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_send_json_error( array( 'message' => __( 'Insufficient permissions.', 'pinned-comments' ) ) );
+        }
 
         global $wpdb;
         $table = PC_Database::table_name();

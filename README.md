@@ -14,9 +14,10 @@ Pinned Comments lets users enter a "Comment Mode" on any post or page, click any
 - **Desktop & mobile viewports** — A switch next to the Comment Mode button toggles between the desktop and the mobile variant. Switching resizes the frame viewport (real mobile layout) and loads that viewport's comments. Each viewport has its own wrapper width and its own set of comments; a comment always belongs to exactly one viewport.
 - **Comment overview panel** — A collapsible sidebar docked to the right (expanded by default, state remembered per browser). Threads are sorted by latest activity, so a fresh reply moves an old thread to the top, just like in Figma. Only threads of the active viewport are listed, and the header shows "Comments (Desktop)" or "Comments (Mobile)". The list is grouped into "On this page" and "Other pages"; clicking a thread on another page loads that page in comment mode at the matching viewport and opens the thread at its pin.
 - **Unread indicator** — A dot in the accent color marks threads with activity you have not seen yet. Opening a thread marks it as read for your user; your own comments and replies count as read.
-- **Threaded replies** — Any logged-in user can reply to an existing comment thread.
+- **Admin-only** — Scripts, styles, the Comment Mode UI and the overview panel are only served to users with the `manage_options` capability. The `pc_frame=1` frame mode and every AJAX endpoint check the same capability, so regular visitors never see or reach any of it.
+- **Threaded replies** — Admins can reply to an existing comment thread.
 - **Image attachments** — Up to 5 images (JPG, PNG, GIF, WebP, max 5 MB each) per comment or reply, with thumbnail previews before sending and a click-to-open grid in the thread. Images can be added and removed while editing a comment. Only users with the `upload_files` capability see the upload button. Files are stored in `wp-content/uploads/pinned-comments/<year>/<month>/` — deliberately outside the media library — and are deleted together with their comment.
-- **Edit & delete own comments** — Users can edit or delete their own comments at any time. Deleting a top-level comment also removes all replies.
+- **Edit & delete own comments** — Admins can edit or delete their own comments at any time. Deleting a top-level comment also removes all replies.
 - **Settings page** — Under Settings → Pinned Comments. Shows total comment count and a "Delete All Comments" button.
 - **No external dependencies** — Vanilla JS, system fonts (`-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif`). No jQuery, no CSS frameworks, no external libraries.
 
@@ -25,7 +26,7 @@ Pinned Comments lets users enter a "Comment Mode" on any post or page, click any
 1. Upload the `pinned-comments` folder to `/wp-content/plugins/`.
 2. Activate the plugin through the **Plugins** menu in WordPress.
 3. The custom database table is created automatically on activation.
-4. Visit any post or page — the comment mode toggle appears in the bottom-right corner.
+4. Visit any post or page while logged in as an admin — the comment mode toggle appears in the bottom-right corner.
 
 ## Usage
 
@@ -52,7 +53,7 @@ Pinned Comments lets users enter a "Comment Mode" on any post or page, click any
 
 - WordPress 5.0+
 - PHP 7.0+
-- Logged-in users only can create, edit, and delete comments.
+- Admin-only tool: scripts, styles, UI, the frame mode and all AJAX endpoints require the `manage_options` capability. Regular visitors see nothing.
 
 ## Uninstall
 
